@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import type { StyleReport } from '@/types/style'
 
@@ -12,6 +13,27 @@ export default function StyleReportPage() {
   const location = useLocation()
   const navigate = useNavigate()
   const state = location.state as LocationState | null
+
+  const [hairstyleImage, setHairstyleImage] = useState<string | null>(null)
+  const [hairstyleLoading, setHairstyleLoading] = useState(true)
+  const [hairstyleError, setHairstyleError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!state?.photo) return
+
+    fetch('/api/hairstyle', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image: state.photo }),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.error) throw new Error(data.error)
+        setHairstyleImage(data.image)
+      })
+      .catch((err: Error) => setHairstyleError(err.message))
+      .finally(() => setHairstyleLoading(false))
+  }, [state?.photo])
 
   if (!state?.report) {
     navigate('/', { replace: true })
@@ -39,13 +61,13 @@ export default function StyleReportPage() {
           <img
             src={photo}
             alt="프로필"
-            className="w-20 h-20 rounded-2xl object-cover flex-shrink-0"
+            className="w-20 h-20 rounded-2xl object-cover shrink-0"
           />
           <div className="flex-1">
             <p className="text-xl font-bold text-gray-900">{report.bodyType.type}</p>
             <p className="text-sm text-gray-500 mt-1 leading-relaxed">{report.bodyType.description}</p>
           </div>
-          <div className="text-right flex-shrink-0">
+          <div className="text-right shrink-0">
             <p className="text-sm text-gray-400">신체 정보</p>
             <p className="text-lg font-semibold text-gray-700">{height}cm</p>
             <p className="text-lg font-semibold text-gray-700">{weight}kg</p>
@@ -57,7 +79,7 @@ export default function StyleReportPage() {
           <ul className="space-y-3">
             {report.recommendedStyles.map((style, i) => (
               <li key={i} className="flex items-start gap-3">
-                <span className="mt-0.5 w-5 h-5 rounded-full bg-rose-100 text-rose-500 text-xs flex items-center justify-center font-bold flex-shrink-0">
+                <span className="mt-0.5 w-5 h-5 rounded-full bg-rose-100 text-rose-500 text-xs flex items-center justify-center font-bold shrink-0">
                   {i + 1}
                 </span>
                 <span className="text-gray-700 text-sm leading-relaxed">{style}</span>
@@ -97,7 +119,7 @@ export default function StyleReportPage() {
           <ul className="space-y-3">
             {report.avoidStyles.map((style, i) => (
               <li key={i} className="flex items-start gap-3">
-                <span className="mt-0.5 text-gray-300 flex-shrink-0">✕</span>
+                <span className="mt-0.5 text-gray-300 shrink-0">✕</span>
                 <span className="text-gray-600 text-sm leading-relaxed">{style}</span>
               </li>
             ))}
@@ -109,11 +131,65 @@ export default function StyleReportPage() {
           <ul className="space-y-3">
             {report.stylingTips.map((tip, i) => (
               <li key={i} className="flex items-start gap-3">
-                <span className="mt-0.5 text-rose-400 flex-shrink-0">→</span>
+                <span className="mt-0.5 text-rose-400 shrink-0">→</span>
                 <span className="text-gray-700 text-sm leading-relaxed">{tip}</span>
               </li>
             ))}
           </ul>
+        </Section>
+
+        {/* 추천 헤어스타일 */}
+        <Section title="추천 헤어스타일 9선" emoji="💇">
+          {hairstyleLoading ? (
+            <div className="flex flex-col items-center justify-center py-14 gap-4">
+              <div className="relative w-12 h-12">
+                <svg className="animate-spin w-12 h-12 text-rose-200" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                </svg>
+              </div>
+              <div className="text-center">
+                <p className="text-sm font-medium text-gray-600">AI가 헤어스타일을 생성하고 있습니다</p>
+                <p className="text-xs text-gray-400 mt-1">20~60초 정도 소요됩니다</p>
+              </div>
+            </div>
+          ) : hairstyleError ? (
+            <div className="py-8 text-center">
+              <p className="text-sm text-red-400">{hairstyleError}</p>
+              <button
+                onClick={() => {
+                  setHairstyleError(null)
+                  setHairstyleLoading(true)
+                  fetch('/api/hairstyle', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ image: photo }),
+                  })
+                    .then((res) => res.json())
+                    .then((data) => {
+                      if (data.error) throw new Error(data.error)
+                      setHairstyleImage(data.image)
+                    })
+                    .catch((err: Error) => setHairstyleError(err.message))
+                    .finally(() => setHairstyleLoading(false))
+                }}
+                className="mt-3 text-xs text-rose-400 underline"
+              >
+                다시 시도
+              </button>
+            </div>
+          ) : hairstyleImage ? (
+            <div>
+              <img
+                src={hairstyleImage}
+                alt="AI 추천 헤어스타일 9선"
+                className="w-full rounded-xl"
+              />
+              <p className="text-xs text-gray-400 text-center mt-3">
+                AI가 생성한 이미지로 실제와 다를 수 있습니다
+              </p>
+            </div>
+          ) : null}
         </Section>
 
         {/* 다시 분석 버튼 */}
