@@ -7,6 +7,7 @@ import { useAuthStore } from '@/store/authStore'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import LoginPage from '@/pages/LoginPage'
 import SignupPage from '@/pages/SignupPage'
+import AuthCallbackPage from '@/pages/AuthCallbackPage'
 import StyleInputPage from '@/pages/StyleInputPage'
 import StyleReportPage from '@/pages/StyleReportPage'
 import NotFoundPage from '@/pages/NotFoundPage'
@@ -38,6 +39,7 @@ export default function App() {
           <Routes>
             <Route path="/login" element={<LoginPage />} />
             <Route path="/signup" element={<SignupPage />} />
+            <Route path="/auth/callback" element={<AuthCallbackPage />} />
             <Route
               path="/"
               element={
