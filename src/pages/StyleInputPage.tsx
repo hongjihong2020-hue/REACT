@@ -3,6 +3,8 @@ import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useNavigate } from 'react-router-dom'
+import { supabase } from '@/lib/supabase'
+import { useAuthStore } from '@/store/authStore'
 
 const schema = z.object({
   height: z
@@ -66,6 +68,12 @@ export default function StyleInputPage() {
   const onDragOver = (e: React.DragEvent) => { e.preventDefault(); setIsDragging(true) }
   const onDragLeave = () => setIsDragging(false)
 
+  const { user } = useAuthStore()
+  const handleLogout = async () => {
+    await supabase.auth.signOut()
+    navigate('/login')
+  }
+
   const onSubmit = async (data: FormData) => {
     if (!photo) return
     setApiError(null)
@@ -98,6 +106,18 @@ export default function StyleInputPage() {
   return (
     <div className="min-h-screen bg-linear-to-br from-stone-50 to-rose-50 flex items-center justify-center p-4">
       <div className="w-full max-w-3xl">
+        <div className="flex justify-end mb-4">
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-gray-400">{user?.email}</span>
+            <button
+              onClick={handleLogout}
+              className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              로그아웃
+            </button>
+          </div>
+        </div>
+
         <div className="text-center mb-10">
           <span className="text-xs font-semibold tracking-[0.3em] text-rose-400 uppercase">
             Personal Stylist
