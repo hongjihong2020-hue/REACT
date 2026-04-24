@@ -5,6 +5,7 @@ import ProtectedRoute from '@/components/ProtectedRoute'
 import DashboardLayout from '@/layouts/DashboardLayout'
 import LoginPage from '@/pages/LoginPage'
 import DashboardPage from '@/pages/DashboardPage'
+import StyleInputPage from '@/pages/StyleInputPage'
 import NotFoundPage from '@/pages/NotFoundPage'
 
 export default function App() {
@@ -13,6 +14,7 @@ export default function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/style" element={<StyleInputPage />} />
           <Route
             path="/"
             element={
