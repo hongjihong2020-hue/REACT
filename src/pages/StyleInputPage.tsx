@@ -2,6 +2,7 @@ import { useState, useRef, useCallback } from 'react'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
+import { useNavigate } from 'react-router-dom'
 
 const schema = z.object({
   height: z
@@ -16,10 +17,26 @@ const schema = z.object({
 
 type FormData = z.infer<typeof schema>
 
+const compressImage = (dataUrl: string, maxSize = 1024): Promise<string> =>
+  new Promise((resolve) => {
+    const img = new Image()
+    img.onload = () => {
+      const scale = Math.min(maxSize / img.width, maxSize / img.height, 1)
+      const canvas = document.createElement('canvas')
+      canvas.width = img.width * scale
+      canvas.height = img.height * scale
+      canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height)
+      resolve(canvas.toDataURL('image/jpeg', 0.8))
+    }
+    img.src = dataUrl
+  })
+
 export default function StyleInputPage() {
   const [photo, setPhoto] = useState<string | null>(null)
   const [isDragging, setIsDragging] = useState(false)
+  const [apiError, setApiError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const navigate = useNavigate()
 
   const {
     register,
@@ -46,23 +63,41 @@ export default function StyleInputPage() {
     if (file) handleFile(file)
   }, [])
 
-  const onDragOver = (e: React.DragEvent) => {
-    e.preventDefault()
-    setIsDragging(true)
-  }
-
+  const onDragOver = (e: React.DragEvent) => { e.preventDefault(); setIsDragging(true) }
   const onDragLeave = () => setIsDragging(false)
 
   const onSubmit = async (data: FormData) => {
-    // TODO: API 연동
-    console.log({ photo, height: Number(data.height), weight: Number(data.weight) })
-    alert('스타일 분석을 시작합니다!')
+    if (!photo) return
+    setApiError(null)
+
+    try {
+      const compressed = await compressImage(photo)
+
+      const res = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          image: compressed,
+          height: Number(data.height),
+          weight: Number(data.weight),
+        }),
+      })
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error ?? '분석에 실패했습니다.')
+      }
+
+      const report = await res.json()
+      navigate('/result', { state: { report, photo: compressed, height: data.height, weight: data.weight } })
+    } catch (err) {
+      setApiError(err instanceof Error ? err.message : '오류가 발생했습니다.')
+    }
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-stone-50 to-rose-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-linear-to-br from-stone-50 to-rose-50 flex items-center justify-center p-4">
       <div className="w-full max-w-3xl">
-        {/* 헤더 */}
         <div className="text-center mb-10">
           <span className="text-xs font-semibold tracking-[0.3em] text-rose-400 uppercase">
             Personal Stylist
@@ -79,28 +114,21 @@ export default function StyleInputPage() {
           <div className="bg-white rounded-3xl shadow-xl shadow-gray-100 overflow-hidden">
             <div className="grid md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-gray-100">
 
-              {/* 사진 업로드 영역 */}
+              {/* 사진 업로드 */}
               <div className="p-8 flex flex-col items-center justify-center gap-6">
                 <div
                   onClick={() => fileInputRef.current?.click()}
                   onDrop={onDrop}
                   onDragOver={onDragOver}
                   onDragLeave={onDragLeave}
-                  className={`relative w-full aspect-[3/4] max-w-[220px] rounded-2xl border-2 border-dashed cursor-pointer transition-all duration-200 overflow-hidden flex flex-col items-center justify-center gap-3 group
-                    ${isDragging
-                      ? 'border-rose-400 bg-rose-50'
-                      : photo
-                      ? 'border-transparent'
-                      : 'border-gray-200 hover:border-rose-300 hover:bg-rose-50/40'
-                    }`}
+                  className={`relative w-full aspect-3/4 max-w-55 rounded-2xl border-2 border-dashed cursor-pointer transition-all duration-200 overflow-hidden flex flex-col items-center justify-center gap-3 group
+                    ${isDragging ? 'border-rose-400 bg-rose-50'
+                      : photo ? 'border-transparent'
+                      : 'border-gray-200 hover:border-rose-300 hover:bg-rose-50/40'}`}
                 >
                   {photo ? (
                     <>
-                      <img
-                        src={photo}
-                        alt="업로드된 사진"
-                        className="absolute inset-0 w-full h-full object-cover"
-                      />
+                      <img src={photo} alt="업로드된 사진" className="absolute inset-0 w-full h-full object-cover" />
                       <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                         <span className="text-white text-sm font-medium">사진 변경</span>
                       </div>
@@ -121,27 +149,17 @@ export default function StyleInputPage() {
                   )}
                 </div>
 
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={onFileChange}
-                  className="hidden"
-                />
-
-                <p className="text-xs text-gray-400 text-center">
-                  전신 사진을 올리면<br />더 정확한 분석이 가능합니다
-                </p>
+                <input ref={fileInputRef} type="file" accept="image/*" onChange={onFileChange} className="hidden" />
+                <p className="text-xs text-gray-400 text-center">전신 사진을 올리면<br />더 정확한 분석이 가능합니다</p>
               </div>
 
-              {/* 신체 정보 입력 영역 */}
+              {/* 신체 정보 */}
               <div className="p-8 flex flex-col justify-center gap-6">
                 <div>
                   <h2 className="text-lg font-semibold text-gray-800 mb-1">신체 정보</h2>
                   <p className="text-sm text-gray-400">정확한 핏 추천을 위해 필요합니다</p>
                 </div>
 
-                {/* 키 */}
                 <div className="space-y-2">
                   <label className="block text-sm font-medium text-gray-700">키</label>
                   <div className="relative">
@@ -153,9 +171,7 @@ export default function StyleInputPage() {
                         focus:ring-2 focus:ring-rose-200 focus:border-rose-400
                         ${errors.height ? 'border-red-300 bg-red-50' : 'border-gray-200 bg-gray-50 hover:bg-white'}`}
                     />
-                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-gray-400 font-medium">
-                      cm
-                    </span>
+                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-gray-400 font-medium">cm</span>
                   </div>
                   {errors.height && (
                     <p className="text-xs text-red-500 flex items-center gap-1">
@@ -167,7 +183,6 @@ export default function StyleInputPage() {
                   )}
                 </div>
 
-                {/* 몸무게 */}
                 <div className="space-y-2">
                   <label className="block text-sm font-medium text-gray-700">몸무게</label>
                   <div className="relative">
@@ -179,9 +194,7 @@ export default function StyleInputPage() {
                         focus:ring-2 focus:ring-rose-200 focus:border-rose-400
                         ${errors.weight ? 'border-red-300 bg-red-50' : 'border-gray-200 bg-gray-50 hover:bg-white'}`}
                     />
-                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-gray-400 font-medium">
-                      kg
-                    </span>
+                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-gray-400 font-medium">kg</span>
                   </div>
                   {errors.weight && (
                     <p className="text-xs text-red-500 flex items-center gap-1">
@@ -193,15 +206,16 @@ export default function StyleInputPage() {
                   )}
                 </div>
 
-                {/* BMI 안내 */}
                 <div className="bg-stone-50 rounded-xl p-4">
                   <p className="text-xs text-gray-400 leading-relaxed">
-                    입력하신 정보는 스타일 추천에만 활용되며,<br />
-                    외부에 공개되지 않습니다.
+                    입력하신 정보는 스타일 추천에만 활용되며,<br />외부에 공개되지 않습니다.
                   </p>
                 </div>
 
-                {/* 제출 버튼 */}
+                {apiError && (
+                  <p className="text-xs text-red-500 bg-red-50 rounded-lg px-4 py-3">{apiError}</p>
+                )}
+
                 <button
                   type="submit"
                   disabled={isSubmitting || !photo}
@@ -215,11 +229,9 @@ export default function StyleInputPage() {
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
                       </svg>
-                      분석 중...
+                      AI 분석 중...
                     </span>
-                  ) : (
-                    '스타일 분석 시작하기'
-                  )}
+                  ) : '스타일 분석 시작하기'}
                 </button>
 
                 {!photo && (
