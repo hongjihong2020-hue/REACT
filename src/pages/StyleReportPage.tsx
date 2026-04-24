@@ -2,6 +2,34 @@ import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import type { StyleReport } from '@/types/style'
 
+async function fetchHairstyle(
+  photo: string,
+  setImage: (v: string) => void,
+  setError: (v: string) => void,
+  setLoading: (v: boolean) => void,
+) {
+  try {
+    const res = await fetch('/api/hairstyle', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image: photo }),
+    })
+    const text = await res.text()
+    let data: { image?: string; error?: string }
+    try {
+      data = JSON.parse(text)
+    } catch {
+      throw new Error('서버 응답 오류입니다. 잠시 후 다시 시도해주세요.')
+    }
+    if (data.error) throw new Error(data.error)
+    if (data.image) setImage(data.image)
+  } catch (err) {
+    setError(err instanceof Error ? err.message : '알 수 없는 오류가 발생했습니다.')
+  } finally {
+    setLoading(false)
+  }
+}
+
 interface LocationState {
   report: StyleReport
   photo: string
@@ -21,18 +49,7 @@ export default function StyleReportPage() {
   useEffect(() => {
     if (!state?.photo) return
 
-    fetch('/api/hairstyle', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ image: state.photo }),
-    })
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.error) throw new Error(data.error)
-        setHairstyleImage(data.image)
-      })
-      .catch((err: Error) => setHairstyleError(err.message))
-      .finally(() => setHairstyleLoading(false))
+    fetchHairstyle(state.photo, setHairstyleImage, setHairstyleError, setHairstyleLoading)
   }, [state?.photo])
 
   if (!state?.report) {
@@ -160,18 +177,7 @@ export default function StyleReportPage() {
                 onClick={() => {
                   setHairstyleError(null)
                   setHairstyleLoading(true)
-                  fetch('/api/hairstyle', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ image: photo }),
-                  })
-                    .then((res) => res.json())
-                    .then((data) => {
-                      if (data.error) throw new Error(data.error)
-                      setHairstyleImage(data.image)
-                    })
-                    .catch((err: Error) => setHairstyleError(err.message))
-                    .finally(() => setHairstyleLoading(false))
+                  fetchHairstyle(photo, setHairstyleImage, setHairstyleError, setHairstyleLoading)
                 }}
                 className="mt-3 text-xs text-rose-400 underline"
               >
