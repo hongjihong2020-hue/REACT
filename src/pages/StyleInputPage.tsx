@@ -5,6 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
+import Spinner from '@/components/Spinner'
 
 const schema = z.object({
   height: z
@@ -20,7 +21,7 @@ const schema = z.object({
 type FormData = z.infer<typeof schema>
 
 const compressImage = (dataUrl: string, maxSize = 1024): Promise<string> =>
-  new Promise((resolve) => {
+  new Promise((resolve, reject) => {
     const img = new Image()
     img.onload = () => {
       const scale = Math.min(maxSize / img.width, maxSize / img.height, 1)
@@ -30,19 +31,20 @@ const compressImage = (dataUrl: string, maxSize = 1024): Promise<string> =>
       canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height)
       resolve(canvas.toDataURL('image/jpeg', 0.8))
     }
+    img.onerror = () => reject(new Error('이미지를 불러올 수 없습니다.'))
     img.src = dataUrl
   })
 
 export default function StyleInputPage() {
   const [photo, setPhoto] = useState<string | null>(null)
   const [isDragging, setIsDragging] = useState(false)
-  const [apiError, setApiError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const navigate = useNavigate()
 
   const {
     register,
     handleSubmit,
+    setError,
     formState: { errors, isSubmitting },
   } = useForm<FormData>({ resolver: zodResolver(schema) })
 
@@ -65,7 +67,10 @@ export default function StyleInputPage() {
     if (file) handleFile(file)
   }, [])
 
-  const onDragOver = (e: React.DragEvent) => { e.preventDefault(); setIsDragging(true) }
+  const onDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    if (!isDragging) setIsDragging(true)
+  }
   const onDragLeave = () => setIsDragging(false)
 
   const { user } = useAuthStore()
@@ -76,7 +81,6 @@ export default function StyleInputPage() {
 
   const onSubmit = async (data: FormData) => {
     if (!photo) return
-    setApiError(null)
 
     try {
       const compressed = await compressImage(photo)
@@ -99,7 +103,7 @@ export default function StyleInputPage() {
       const report = await res.json()
       navigate('/result', { state: { report, photo: compressed, height: data.height, weight: data.weight } })
     } catch (err) {
-      setApiError(err instanceof Error ? err.message : '오류가 발생했습니다.')
+      setError('root', { message: err instanceof Error ? err.message : '오류가 발생했습니다.' })
     }
   }
 
@@ -133,8 +137,6 @@ export default function StyleInputPage() {
         <form onSubmit={handleSubmit(onSubmit)}>
           <div className="bg-white rounded-3xl shadow-xl shadow-gray-100 overflow-hidden">
             <div className="grid md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-gray-100">
-
-              {/* 사진 업로드 */}
               <div className="p-8 flex flex-col items-center justify-center gap-6">
                 <div
                   onClick={() => fileInputRef.current?.click()}
@@ -173,7 +175,6 @@ export default function StyleInputPage() {
                 <p className="text-xs text-gray-400 text-center">전신 사진을 올리면<br />더 정확한 분석이 가능합니다</p>
               </div>
 
-              {/* 신체 정보 */}
               <div className="p-8 flex flex-col justify-center gap-6">
                 <div>
                   <h2 className="text-lg font-semibold text-gray-800 mb-1">신체 정보</h2>
@@ -232,8 +233,8 @@ export default function StyleInputPage() {
                   </p>
                 </div>
 
-                {apiError && (
-                  <p className="text-xs text-red-500 bg-red-50 rounded-lg px-4 py-3">{apiError}</p>
+                {errors.root && (
+                  <p className="text-xs text-red-500 bg-red-50 rounded-lg px-4 py-3">{errors.root.message}</p>
                 )}
 
                 <button
@@ -245,10 +246,7 @@ export default function StyleInputPage() {
                 >
                   {isSubmitting ? (
                     <span className="flex items-center justify-center gap-2">
-                      <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                      </svg>
+                      <Spinner size="sm" />
                       AI 분석 중...
                     </span>
                   ) : '스타일 분석 시작하기'}
